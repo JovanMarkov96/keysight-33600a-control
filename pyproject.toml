@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "keysight-33600a-control"
 version = "0.1.0"
-description = "Python control library for Keysight 33600A series waveform generators"
+description = "Open-source Python control library for Keysight 33600A series waveform generators"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-  {name = "Lab185 Team"}
+  {name = "keysight-33600a-control contributors"}
 ]
 license = {text = "MIT"}
 dependencies = [

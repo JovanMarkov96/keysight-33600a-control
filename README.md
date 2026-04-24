@@ -2,7 +2,7 @@
 
 Professional Python library for remote control of Keysight 33600A series waveform generators via SCPI/PyVISA.
 
-This package is designed for lab automation and future integration into Lab185 GUI tooling.
+This project is vendor-neutral and intended for anyone building measurement and automation software.
 
 ## Features (Phase 1)
 
@@ -13,6 +13,12 @@ This package is designed for lab automation and future integration into Lab185 G
 - Burst and trigger basics
 - Frequency sweep basics
 - Arbitrary waveform upload helpers (text float/DAC)
+
+## Roadmap
+
+- Complete advanced SCPI subsystem coverage
+- Add hardware-in-the-loop validation scripts
+- Build a standalone GUI application for interactive testing and configuration
 
 ## Install
 
@@ -42,10 +48,16 @@ with Keysight33600A(resource) as gen:
 
 - API implementation: `src/keysight_33600a/`
 - command coverage map: `docs/COMMAND_COVERAGE.md`
+- GUI roadmap: `docs/GUI_ROADMAP.md`
 - usage examples: `examples/`
-- implementation roadmap: `IMPLEMENTATION_PLAN.md`
+
+## Legal and Trademark Notice
+
+- This project is not affiliated with, endorsed by, or sponsored by Keysight Technologies.
+- Keysight and 33600A are trademarks of their respective owners.
+- This repository provides open-source integration tooling only and does not claim ownership of vendor protocols, manuals, or product IP.
 
 ## Notes
 
-- Commands are based on SCPI practices and 33500-family command patterns.
-- For model-specific limits and edge cases, validate against your exact 33600A firmware/manual revision.
+- Commands are implemented using documented SCPI conventions and verified command families.
+- Always validate model-specific limits and behavior against your exact instrument firmware and documentation.

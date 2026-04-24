@@ -1,6 +1,11 @@
 # Command Coverage Map
 
-This table tracks implemented SCPI functionality in the first development iteration.
+This document tracks SCPI subsystem coverage and implementation status.
+
+Status values:
+- Implemented: available in current high-level API
+- Planned: defined for upcoming API iterations
+- Needs-manual-verification: command family identified but exact model behavior must be confirmed on hardware/manual revision
 
 | Domain | SCPI examples | Status | API method(s) |
 |---|---|---|---|
@@ -23,10 +28,62 @@ This table tracks implemented SCPI functionality in the first development iterat
 | Arb sample rate | `SOUR{ch}:FUNC:ARB:SRAT` | Implemented | `set_arb_sample_rate` |
 | Error queue | `SYST:ERR?` | Implemented | `get_system_errors`, `raise_for_instrument_errors`, `execute_checked` |
 
-## Planned Next Coverage
+## Trigger Subsystem Expansion
 
-- Trigger timer/delay/slope
-- Sweep spacing/shape and marker controls
-- Modulation families (AM/FM/PM/FSK/BPSK/SUM)
-- Binary transfer mode for large arbitrary data blocks
-- Sync/state-save/recall helpers
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| Trigger timer | `TRIG{ch}:TIM` | Planned | `set_trigger_timer`, `get_trigger_timer` |
+| Trigger delay | `TRIG{ch}:DEL` | Planned | `set_trigger_delay`, `get_trigger_delay` |
+| Trigger slope | `TRIG{ch}:SLOP` | Planned | `set_trigger_slope`, `get_trigger_slope` |
+| Trigger count | `TRIG{ch}:COUN` | Planned | `set_trigger_count`, `get_trigger_count` |
+
+## Sweep Subsystem Expansion
+
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| Sweep spacing | `SOUR{ch}:SWE:SPAC` | Planned | `set_sweep_spacing`, `get_sweep_spacing` |
+| Sweep shape | `SOUR{ch}:SWE:SHAP` | Planned | `set_sweep_shape`, `get_sweep_shape` |
+| Sweep trigger source | `SOUR{ch}:SWE:TRIG:SOUR` | Planned | `set_sweep_trigger_source` |
+| Sweep hold/return time | `SOUR{ch}:SWE:HTIM`, `SOUR{ch}:SWE:RTIM` | Planned | `set_sweep_hold_time`, `set_sweep_return_time` |
+| Sweep marker | `SOUR{ch}:MARK:POIN`, `SOUR{ch}:MARK:STAT` | Needs-manual-verification | `set_sweep_marker_point`, `set_sweep_marker_enabled` |
+
+## Modulation Subsystems
+
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| AM | `SOUR{ch}:AM:STAT`, `SOUR{ch}:AM:DEPT`, `SOUR{ch}:AM:SOUR` | Planned | `set_am_enabled`, `set_am_depth`, `set_am_source` |
+| FM | `SOUR{ch}:FM:STAT`, `SOUR{ch}:FM:DEV`, `SOUR{ch}:FM:SOUR` | Planned | `set_fm_enabled`, `set_fm_deviation`, `set_fm_source` |
+| PM | `SOUR{ch}:PM:STAT`, `SOUR{ch}:PM:DEV`, `SOUR{ch}:PM:SOUR` | Planned | `set_pm_enabled`, `set_pm_deviation`, `set_pm_source` |
+| FSK | `SOUR{ch}:FSK:STAT`, `SOUR{ch}:FSK:FREQ`, `SOUR{ch}:FSK:SOUR` | Planned | `set_fsk_enabled`, `set_fsk_frequency`, `set_fsk_source` |
+| BPSK | `SOUR{ch}:BPSK:STAT`, `SOUR{ch}:BPSK:PHAS`, `SOUR{ch}:BPSK:SOUR` | Planned | `set_bpsk_enabled`, `set_bpsk_phase`, `set_bpsk_source` |
+| SUM | `SOUR{ch}:SUM:STAT`, `SOUR{ch}:SUM:AMPL` | Needs-manual-verification | `set_sum_enabled`, `set_sum_amplitude` |
+
+## Arbitrary Waveform Data Transfer
+
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| Binary arb upload | `SOUR{ch}:DATA:ARB:DAC <name>,#<n><len><data>` | Planned | `upload_arb_waveform_binary` |
+| Volatile memory clear | `SOUR{ch}:DATA:VOL:CLE` | Planned | `clear_volatile_arb` |
+| Arb catalog/list | `SOUR{ch}:DATA:CAT?` | Planned | `list_arb_waveforms` |
+
+## Sync, State, and Recall
+
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| Channel sync phase | `SOUR:PHAS:SYNC` | Planned | `sync_phases` |
+| Instrument state save | `*SAV <n>` | Planned | `save_state` |
+| Instrument state recall | `*RCL <n>` | Planned | `recall_state` |
+| User preset / memory slots | model-specific state commands | Needs-manual-verification | `save_profile`, `load_profile` |
+
+## Status and Event Registers
+
+| Domain | SCPI examples | Status | Planned API method(s) |
+|---|---|---|---|
+| Status byte | `*STB?` | Planned | `get_status_byte` |
+| ESR query | `*ESR?`, `*ESE`, `*ESE?` | Planned | `get_event_status`, `set_event_enable` |
+| Service request enable | `*SRE`, `*SRE?` | Planned | `set_service_request_enable` |
+
+## Verification Notes
+
+- Command names and hierarchy should be cross-checked against the exact 33600A programming guide revision in use.
+- For all entries marked Needs-manual-verification, implementation should include explicit hardware validation scripts before release.
