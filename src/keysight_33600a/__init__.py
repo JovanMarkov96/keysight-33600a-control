@@ -1,6 +1,14 @@
 from .instrument import Keysight33600A
 from .discovery import list_keysight_resources
-from .models import WaveformShape, AmplitudeUnit, BurstMode, TriggerSource
+from .models import (
+    WaveformShape,
+    AmplitudeUnit,
+    BurstMode,
+    TriggerSource,
+    TriggerSlope,
+    SweepSpacing,
+    ModulationSource,
+)
 from .errors import (
     Keysight33600AError,
     ConnectionError33600A,
@@ -15,6 +23,9 @@ __all__ = [
     "AmplitudeUnit",
     "BurstMode",
     "TriggerSource",
+    "TriggerSlope",
+    "SweepSpacing",
+    "ModulationSource",
     "Keysight33600AError",
     "ConnectionError33600A",
     "SCPICommandError",

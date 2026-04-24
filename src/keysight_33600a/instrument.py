@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union
 
 import pyvisa
 
@@ -11,12 +11,23 @@ from .errors import (
     SCPICommandError,
     ValidationError33600A,
 )
-from .models import AmplitudeUnit, BurstMode, TriggerSource, WaveformShape
+from .models import (
+    AmplitudeUnit,
+    BurstMode,
+    ModulationSource,
+    SweepSpacing,
+    TriggerSlope,
+    TriggerSource,
+    WaveformShape,
+)
 
 ShapeLike = Union[WaveformShape, str]
 UnitLike = Union[AmplitudeUnit, str]
 BurstModeLike = Union[BurstMode, str]
 TriggerSourceLike = Union[TriggerSource, str]
+TriggerSlopeLike = Union[TriggerSlope, str]
+SweepSpacingLike = Union[SweepSpacing, str]
+ModulationSourceLike = Union[ModulationSource, str]
 
 
 @dataclass
@@ -120,6 +131,34 @@ class Keysight33600A:
 
     def clear_status(self) -> None:
         self.write("*CLS")
+
+    def get_status_byte(self) -> int:
+        return self.ask_int("*STB?")
+
+    def get_event_status(self) -> int:
+        return self.ask_int("*ESR?")
+
+    def set_event_enable(self, mask: int) -> None:
+        self._validate_register_mask(mask)
+        self.write(f"*ESE {int(mask)}")
+
+    def get_event_enable(self) -> int:
+        return self.ask_int("*ESE?")
+
+    def set_service_request_enable(self, mask: int) -> None:
+        self._validate_register_mask(mask)
+        self.write(f"*SRE {int(mask)}")
+
+    def get_service_request_enable(self) -> int:
+        return self.ask_int("*SRE?")
+
+    def save_state(self, slot: int) -> None:
+        self._validate_state_slot(slot)
+        self.write(f"*SAV {int(slot)}")
+
+    def recall_state(self, slot: int) -> None:
+        self._validate_state_slot(slot)
+        self.write(f"*RCL {int(slot)}")
 
     def operation_complete(self) -> bool:
         return self.ask_int("*OPC?") == 1
@@ -239,9 +278,52 @@ class Keysight33600A:
         ch = self._validate_channel(channel)
         return self.query(f"TRIG{ch}:SOUR?")
 
+    def set_trigger_count(self, channel: int, count: int) -> None:
+        ch = self._validate_channel(channel)
+        if count <= 0:
+            raise ValidationError33600A("Trigger count must be >= 1")
+        self.write(f"TRIG{ch}:COUN {int(count)}")
+
+    def get_trigger_count(self, channel: int) -> int:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"TRIG{ch}:COUN?")
+
+    def set_trigger_delay(self, channel: int, delay_s: float) -> None:
+        ch = self._validate_channel(channel)
+        if delay_s < 0:
+            raise ValidationError33600A("Trigger delay must be >= 0")
+        self.write(f"TRIG{ch}:DEL {float(delay_s)}")
+
+    def get_trigger_delay(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"TRIG{ch}:DEL?")
+
+    def set_trigger_timer(self, channel: int, period_s: float) -> None:
+        ch = self._validate_channel(channel)
+        if period_s <= 0:
+            raise ValidationError33600A("Trigger timer period must be > 0")
+        self.write(f"TRIG{ch}:TIM {float(period_s)}")
+
+    def get_trigger_timer(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"TRIG{ch}:TIM?")
+
+    def set_trigger_slope(self, channel: int, slope: TriggerSlopeLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(slope, TriggerSlope, "trigger slope")
+        self.write(f"TRIG{ch}:SLOP {value}")
+
+    def get_trigger_slope(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"TRIG{ch}:SLOP?")
+
     def set_sweep_enabled(self, channel: int, enabled: bool) -> None:
         ch = self._validate_channel(channel)
         self.write(f"SOUR{ch}:SWE:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_sweep_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:SWE:STAT?") == 1
 
     def set_sweep_start(self, channel: int, frequency_hz: float) -> None:
         ch = self._validate_channel(channel)
@@ -249,17 +331,202 @@ class Keysight33600A:
             raise ValidationError33600A("Sweep start frequency must be > 0")
         self.write(f"SOUR{ch}:FREQ:STAR {float(frequency_hz)}")
 
+    def get_sweep_start(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:FREQ:STAR?")
+
     def set_sweep_stop(self, channel: int, frequency_hz: float) -> None:
         ch = self._validate_channel(channel)
         if frequency_hz <= 0:
             raise ValidationError33600A("Sweep stop frequency must be > 0")
         self.write(f"SOUR{ch}:FREQ:STOP {float(frequency_hz)}")
 
+    def get_sweep_stop(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:FREQ:STOP?")
+
     def set_sweep_time(self, channel: int, sweep_time_s: float) -> None:
         ch = self._validate_channel(channel)
         if sweep_time_s <= 0:
             raise ValidationError33600A("Sweep time must be > 0")
         self.write(f"SOUR{ch}:SWE:TIME {float(sweep_time_s)}")
+
+    def get_sweep_time(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:SWE:TIME?")
+
+    def set_sweep_spacing(self, channel: int, spacing: SweepSpacingLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(spacing, SweepSpacing, "sweep spacing")
+        self.write(f"SOUR{ch}:SWE:SPAC {value}")
+
+    def get_sweep_spacing(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:SWE:SPAC?")
+
+    def set_sweep_hold_time(self, channel: int, hold_time_s: float) -> None:
+        ch = self._validate_channel(channel)
+        if hold_time_s < 0:
+            raise ValidationError33600A("Sweep hold time must be >= 0")
+        self.write(f"SOUR{ch}:SWE:HTIM {float(hold_time_s)}")
+
+    def get_sweep_hold_time(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:SWE:HTIM?")
+
+    def set_sweep_return_time(self, channel: int, return_time_s: float) -> None:
+        ch = self._validate_channel(channel)
+        if return_time_s < 0:
+            raise ValidationError33600A("Sweep return time must be >= 0")
+        self.write(f"SOUR{ch}:SWE:RTIM {float(return_time_s)}")
+
+    def get_sweep_return_time(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:SWE:RTIM?")
+
+    def set_sweep_trigger_source(
+        self, channel: int, source: TriggerSourceLike
+    ) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, TriggerSource, "sweep trigger source")
+        self.write(f"SOUR{ch}:SWE:TRIG:SOUR {value}")
+
+    def get_sweep_trigger_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:SWE:TRIG:SOUR?")
+
+    def set_am_enabled(self, channel: int, enabled: bool) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:AM:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_am_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:AM:STAT?") == 1
+
+    def set_am_depth(self, channel: int, depth_percent: float) -> None:
+        ch = self._validate_channel(channel)
+        if depth_percent < 0:
+            raise ValidationError33600A("AM depth must be >= 0")
+        self.write(f"SOUR{ch}:AM:DEPT {float(depth_percent)}")
+
+    def get_am_depth(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:AM:DEPT?")
+
+    def set_am_source(self, channel: int, source: ModulationSourceLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, ModulationSource, "AM source")
+        self.write(f"SOUR{ch}:AM:SOUR {value}")
+
+    def get_am_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:AM:SOUR?")
+
+    def set_fm_enabled(self, channel: int, enabled: bool) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:FM:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_fm_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:FM:STAT?") == 1
+
+    def set_fm_deviation(self, channel: int, deviation_hz: float) -> None:
+        ch = self._validate_channel(channel)
+        if deviation_hz < 0:
+            raise ValidationError33600A("FM deviation must be >= 0")
+        self.write(f"SOUR{ch}:FM:DEV {float(deviation_hz)}")
+
+    def get_fm_deviation(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:FM:DEV?")
+
+    def set_fm_source(self, channel: int, source: ModulationSourceLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, ModulationSource, "FM source")
+        self.write(f"SOUR{ch}:FM:SOUR {value}")
+
+    def get_fm_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:FM:SOUR?")
+
+    def set_pm_enabled(self, channel: int, enabled: bool) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:PM:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_pm_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:PM:STAT?") == 1
+
+    def set_pm_deviation(self, channel: int, deviation_deg: float) -> None:
+        ch = self._validate_channel(channel)
+        if deviation_deg < 0:
+            raise ValidationError33600A("PM deviation must be >= 0")
+        self.write(f"SOUR{ch}:PM:DEV {float(deviation_deg)}")
+
+    def get_pm_deviation(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:PM:DEV?")
+
+    def set_pm_source(self, channel: int, source: ModulationSourceLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, ModulationSource, "PM source")
+        self.write(f"SOUR{ch}:PM:SOUR {value}")
+
+    def get_pm_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:PM:SOUR?")
+
+    def set_fsk_enabled(self, channel: int, enabled: bool) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:FSK:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_fsk_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:FSK:STAT?") == 1
+
+    def set_fsk_frequency(self, channel: int, frequency_hz: float) -> None:
+        ch = self._validate_channel(channel)
+        if frequency_hz <= 0:
+            raise ValidationError33600A("FSK frequency must be > 0")
+        self.write(f"SOUR{ch}:FSK:FREQ {float(frequency_hz)}")
+
+    def get_fsk_frequency(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:FSK:FREQ?")
+
+    def set_fsk_source(self, channel: int, source: ModulationSourceLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, ModulationSource, "FSK source")
+        self.write(f"SOUR{ch}:FSK:SOUR {value}")
+
+    def get_fsk_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:FSK:SOUR?")
+
+    def set_bpsk_enabled(self, channel: int, enabled: bool) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:BPSK:STAT {'ON' if enabled else 'OFF'}")
+
+    def get_bpsk_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:BPSK:STAT?") == 1
+
+    def set_bpsk_phase(self, channel: int, phase_deg: float) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:BPSK:PHAS {float(phase_deg)}")
+
+    def get_bpsk_phase(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:BPSK:PHAS?")
+
+    def set_bpsk_source(self, channel: int, source: ModulationSourceLike) -> None:
+        ch = self._validate_channel(channel)
+        value = self._normalize_enum_or_string(source, ModulationSource, "BPSK source")
+        self.write(f"SOUR{ch}:BPSK:SOUR {value}")
+
+    def get_bpsk_source(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:BPSK:SOUR?")
 
     def upload_arb_waveform_floats(
         self,
@@ -309,6 +576,31 @@ class Keysight33600A:
             raise ValidationError33600A("Arbitrary sample rate must be > 0")
         self.write(f"SOUR{ch}:FUNC:ARB:SRAT {float(sample_rate_hz)}")
 
+    def clear_volatile_arb(self, channel: int) -> None:
+        ch = self._validate_channel(channel)
+        self.write(f"SOUR{ch}:DATA:VOL:CLE")
+
+    def get_volatile_arb_catalog(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:DATA:VOL:CAT?")
+
+    def get_volatile_arb_free(self, channel: int) -> int:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:DATA:VOL:FREE?")
+
+    def upload_arb_waveform_binary(self, channel: int, name: str, data: bytes) -> None:
+        """Upload arbitrary waveform payload using SCPI definite-length binary block."""
+        ch = self._validate_channel(channel)
+        self._validate_waveform_name(name)
+        if not data:
+            raise ValidationError33600A("Binary waveform payload cannot be empty")
+
+        self._require_connection()
+        size_text = str(len(data))
+        header = f"#{len(size_text)}{size_text}".encode("ascii")
+        prefix = f"SOUR{ch}:DATA:ARB:DAC {name},".encode("ascii")
+        self._inst.write_raw(prefix + header + data)
+
     def get_system_errors(self, max_reads: int = 20) -> List[ErrorEntry]:
         if max_reads <= 0:
             raise ValidationError33600A("max_reads must be > 0")
@@ -336,6 +628,16 @@ class Keysight33600A:
     def _require_connection(self) -> None:
         if self._inst is None:
             raise ConnectionError33600A("Instrument not connected")
+
+    @staticmethod
+    def _validate_register_mask(mask: int) -> None:
+        if mask < 0 or mask > 255:
+            raise ValidationError33600A("Register mask must be in [0, 255]")
+
+    @staticmethod
+    def _validate_state_slot(slot: int) -> None:
+        if slot not in (0, 1, 2, 3, 4):
+            raise ValidationError33600A("State slot must be one of 0,1,2,3,4")
 
     @staticmethod
     def _validate_channel(channel: int) -> int:

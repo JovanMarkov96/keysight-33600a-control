@@ -8,11 +8,15 @@ This project is vendor-neutral and intended for anyone building measurement and 
 
 - VISA connection management (USB/LAN/GPIB)
 - Robust SCPI read/write/query wrapper
-- Error queue handling (`SYST:ERR?`)
+- IEEE status/event helpers (`*STB?`, `*ESR?`, `*ESE`, `*SRE`)
+- State save/recall helpers (`*SAV`, `*RCL`)
 - Channel-aware output and waveform control (CH1/CH2)
-- Burst and trigger basics
-- Frequency sweep basics
-- Arbitrary waveform upload helpers (text float/DAC)
+- Trigger controls (source/count/delay/slope/timer)
+- Sweep controls (start/stop/time/spacing/hold/return)
+- Modulation controls (AM/FM/PM/FSK/BPSK)
+- Arbitrary waveform helpers (text float, DAC text, binary block)
+- Volatile arbitrary memory controls (catalog/clear/free)
+- Error queue handling (`SYST:ERR?`)
 
 ## Roadmap
 
@@ -48,7 +52,9 @@ with Keysight33600A(resource) as gen:
 
 - API implementation: `src/keysight_33600a/`
 - command coverage map: `docs/COMMAND_COVERAGE.md`
+- manual cross-check audit: `docs/MANUAL_COMMAND_AUDIT.md`
 - GUI roadmap: `docs/GUI_ROADMAP.md`
+- vendor manual handling policy: `docs/vendor_manuals/README.md`
 - usage examples: `examples/`
 
 ## Legal and Trademark Notice

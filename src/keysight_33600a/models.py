@@ -28,3 +28,18 @@ class TriggerSource(str, Enum):
     IMM = "IMM"
     EXT = "EXT"
     BUS = "BUS"
+
+
+class TriggerSlope(str, Enum):
+    POS = "POS"
+    NEG = "NEG"
+
+
+class SweepSpacing(str, Enum):
+    LIN = "LIN"
+    LOG = "LOG"
+
+
+class ModulationSource(str, Enum):
+    INT = "INT"
+    EXT = "EXT"
