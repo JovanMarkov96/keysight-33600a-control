@@ -15,6 +15,7 @@ def test_enums_expose_expected_values() -> None:
     assert AmplitudeUnit.VPP.value == "VPP"
     assert BurstMode.TRIG.value == "TRIG"
     assert TriggerSource.BUS.value == "BUS"
+    assert TriggerSource.TIM.value == "TIM"
     assert TriggerSlope.POS.value == "POS"
     assert SweepSpacing.LOG.value == "LOG"
     assert ModulationSource.INT.value == "INT"

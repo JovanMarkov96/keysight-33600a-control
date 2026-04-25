@@ -28,6 +28,7 @@ class TriggerSource(str, Enum):
     IMM = "IMM"
     EXT = "EXT"
     BUS = "BUS"
+    TIM = "TIM"
 
 
 class TriggerSlope(str, Enum):

@@ -252,10 +252,18 @@ class Keysight33600A:
         ch = self._validate_channel(channel)
         self.write(f"SOUR{ch}:BURS:STAT {'ON' if enabled else 'OFF'}")
 
+    def get_burst_enabled(self, channel: int) -> bool:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:BURS:STAT?") == 1
+
     def set_burst_mode(self, channel: int, mode: BurstModeLike) -> None:
         ch = self._validate_channel(channel)
         value = self._normalize_enum_or_string(mode, BurstMode, "burst mode")
         self.write(f"SOUR{ch}:BURS:MODE {value}")
+
+    def get_burst_mode(self, channel: int) -> str:
+        ch = self._validate_channel(channel)
+        return self.query(f"SOUR{ch}:BURS:MODE?")
 
     def set_burst_ncycles(self, channel: int, ncycles: int) -> None:
         ch = self._validate_channel(channel)
@@ -263,11 +271,19 @@ class Keysight33600A:
             raise ValidationError33600A("Burst cycles must be >= 1")
         self.write(f"SOUR{ch}:BURS:NCYC {int(ncycles)}")
 
+    def get_burst_ncycles(self, channel: int) -> int:
+        ch = self._validate_channel(channel)
+        return self.ask_int(f"SOUR{ch}:BURS:NCYC?")
+
     def set_burst_period(self, channel: int, period_s: float) -> None:
         ch = self._validate_channel(channel)
         if period_s <= 0:
             raise ValidationError33600A("Burst period must be > 0")
         self.write(f"SOUR{ch}:BURS:INT:PER {float(period_s)}")
+
+    def get_burst_period(self, channel: int) -> float:
+        ch = self._validate_channel(channel)
+        return self.ask_float(f"SOUR{ch}:BURS:INT:PER?")
 
     def set_trigger_source(self, channel: int, source: TriggerSourceLike) -> None:
         ch = self._validate_channel(channel)

@@ -48,6 +48,26 @@ with Keysight33600A(resource) as gen:
     gen.set_output(1, True)
 ```
 
+## Standalone GUI
+
+Launch the front-panel-inspired desktop GUI:
+
+```bash
+python -m keysight_33600a.gui_app
+```
+
+or:
+
+```bash
+python examples/launch_gui.py
+```
+
+GUI behavior includes:
+- channel focus (CH1/CH2) and per-channel output controls
+- mode panels for waveform, units, modulation, sweep, burst, trigger, and system
+- illuminated mode buttons based on channel state (modulate/sweep/burst/trigger)
+- manual-trigger workflow and status text aligned with manual terminology
+
 ## Repository Layout
 
 - API implementation: `src/keysight_33600a/`

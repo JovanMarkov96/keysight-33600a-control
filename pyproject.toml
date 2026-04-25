@@ -21,6 +21,9 @@ dev = [
   "pytest>=8.0"
 ]
 
+[project.scripts]
+keysight-33600a-gui = "keysight_33600a.gui_app:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
