@@ -76,7 +76,7 @@ class SimulatedKeysight33600A:
         return self._connected
 
     def identify(self) -> str:
-        return "Keysight,33600A,SIMULATED,0.1"
+        return "Agilent Technologies,33622A,SIMULATED,0.1"
 
     def reset(self) -> None:
         self._channels = {1: _ChannelState(), 2: _ChannelState()}

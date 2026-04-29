@@ -17,9 +17,9 @@ def test_normalize_load_accepts_finite_and_infinite_values() -> None:
 
 
 def test_validate_frequency_uses_manual_limits() -> None:
-    validate_frequency(WaveformShape.SIN, 60_000_000)
+    validate_frequency(WaveformShape.SIN, 82_718_000, amplitude_vpp=0.45)
     with pytest.raises(ValidationError33600A):
-        validate_frequency(WaveformShape.SIN, 60_000_001)
+        validate_frequency(WaveformShape.SIN, 120_000_001, amplitude_vpp=0.45)
 
 
 def test_validate_voltage_settings_respects_termination_and_offset_relation() -> None:

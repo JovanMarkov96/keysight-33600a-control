@@ -16,19 +16,40 @@ class WaveformFrequencyLimit:
     note: str
 
 
-# Conservative 33600-series limits taken from the manual. These stay within the
-# documented ranges across the model table and are safe for offline validation.
-WAVEFORM_FREQUENCY_LIMITS: dict[WaveformShape, WaveformFrequencyLimit] = {
-    WaveformShape.SIN: WaveformFrequencyLimit(WaveformShape.SIN, 60_000_000.0, "33600-series sine limit"),
-    WaveformShape.SQU: WaveformFrequencyLimit(WaveformShape.SQU, 50_000_000.0, "33600-series square/pulse limit"),
-    WaveformShape.TRI: WaveformFrequencyLimit(WaveformShape.TRI, 800_000.0, "33600-series ramp/triangle limit"),
-    WaveformShape.RAMP: WaveformFrequencyLimit(WaveformShape.RAMP, 800_000.0, "33600-series ramp/triangle limit"),
-    WaveformShape.PULS: WaveformFrequencyLimit(WaveformShape.PULS, 50_000_000.0, "33600-series square/pulse limit"),
-    WaveformShape.NOIS: WaveformFrequencyLimit(WaveformShape.NOIS, 60_000_000.0, "33600-series noise limit"),
-    WaveformShape.ARB: WaveformFrequencyLimit(WaveformShape.ARB, 660_000_000.0, "33600-series arbitrary sample rate limit"),
-    WaveformShape.PRBS: WaveformFrequencyLimit(WaveformShape.PRBS, 100_000_000.0, "33600-series PRBS limit"),
-    WaveformShape.DC: WaveformFrequencyLimit(WaveformShape.DC, 0.0, "DC function does not use frequency"),
-}
+@dataclass(frozen=True)
+class FrequencyProfile:
+    sine: tuple[tuple[float, float], ...]
+    square: tuple[tuple[float, float], ...]
+    noise: tuple[tuple[float, float], ...]
+    prbs: tuple[tuple[float, float], ...]
+    ramp: float
+    arb: float
+
+
+_DEFAULT_PROFILE = FrequencyProfile(
+    sine=((4.0, 120_000_000.0), (8.0, 80_000_000.0), (10.0, 60_000_000.0)),
+    square=((4.0, 100_000_000.0), (10.0, 50_000_000.0)),
+    noise=((4.0, 120_000_000.0), (8.0, 80_000_000.0), (10.0, 60_000_000.0)),
+    prbs=((4.0, 200_000_000.0), (10.0, 100_000_000.0)),
+    ramp=800_000.0,
+    arb=1_000_000_000.0,
+)
+
+
+def _select_max_frequency(profile: tuple[tuple[float, float], ...], amplitude_vpp: float | None) -> float:
+    if amplitude_vpp is None:
+        return profile[-1][1]
+
+    for amplitude_limit, max_hz in profile:
+        if amplitude_vpp <= amplitude_limit:
+            return max_hz
+    return profile[-1][1]
+
+
+def _waveform_profile(shape: WaveformShape) -> FrequencyProfile:
+    if shape is WaveformShape.DC:
+        return _DEFAULT_PROFILE
+    return _DEFAULT_PROFILE
 
 
 def normalize_load(load: LoadLike) -> float | str:
@@ -58,15 +79,40 @@ def is_high_impedance_load(load: LoadLike) -> bool:
     return isinstance(normalized, str) and normalized == "INF"
 
 
-def validate_frequency(shape: WaveformShape | str, frequency_hz: float) -> None:
+def validate_frequency(
+    shape: WaveformShape | str,
+    frequency_hz: float,
+    amplitude_vpp: float | None = None,
+) -> None:
     waveform = WaveformShape(shape) if not isinstance(shape, WaveformShape) else shape
     if frequency_hz <= 0:
         raise ValidationError33600A("Frequency must be > 0")
 
-    limit = WAVEFORM_FREQUENCY_LIMITS[waveform]
-    if limit.max_hz > 0 and frequency_hz > limit.max_hz:
+    profile = _waveform_profile(waveform)
+    if waveform is WaveformShape.SIN:
+        max_hz = _select_max_frequency(profile.sine, amplitude_vpp)
+        note = "33622A sine frequency limit"
+    elif waveform in {WaveformShape.SQU, WaveformShape.PULS}:
+        max_hz = _select_max_frequency(profile.square, amplitude_vpp)
+        note = "33622A square/pulse frequency limit"
+    elif waveform in {WaveformShape.TRI, WaveformShape.RAMP}:
+        max_hz = profile.ramp
+        note = "33622A ramp/triangle frequency limit"
+    elif waveform is WaveformShape.NOIS:
+        max_hz = _select_max_frequency(profile.noise, amplitude_vpp)
+        note = "33622A noise frequency limit"
+    elif waveform is WaveformShape.PRBS:
+        max_hz = _select_max_frequency(profile.prbs, amplitude_vpp)
+        note = "33622A PRBS frequency limit"
+    elif waveform is WaveformShape.ARB:
+        max_hz = profile.arb
+        note = "33622A arbitrary sample rate limit"
+    else:
+        return
+
+    if max_hz > 0 and frequency_hz > max_hz:
         raise ValidationError33600A(
-            f"Frequency for {waveform.value} must be <= {limit.max_hz:g} Hz ({limit.note})"
+            f"Frequency for {waveform.value} must be <= {max_hz:g} Hz ({note})"
         )
 
 

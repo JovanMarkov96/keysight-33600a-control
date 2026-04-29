@@ -1,33 +1,63 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter import messagebox
 from typing import Dict, Optional
 
-from .discovery import list_keysight_resources
-from .errors import Keysight33600AError
-from .instrument import Keysight33600A
-from .models import (
-    AmplitudeUnit,
-    BurstMode,
-    ModulationSource,
-    SweepSpacing,
-    TriggerSlope,
-    TriggerSource,
-    WaveformShape,
-)
-from .simulator import SimulatedKeysight33600A
-from .validation import (
-    normalize_load,
-    validate_count,
-    validate_frequency,
-    validate_non_negative_value,
-    validate_positive_value,
-    validate_sweep_shape,
-    validate_voltage_settings,
-)
+if __package__ in {None, ""}:
+    package_root = Path(__file__).resolve().parents[1]
+    if str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+
+    from keysight_33600a.discovery import list_keysight_resources
+    from keysight_33600a.errors import Keysight33600AError
+    from keysight_33600a.instrument import Keysight33600A
+    from keysight_33600a.models import (
+        AmplitudeUnit,
+        BurstMode,
+        ModulationSource,
+        SweepSpacing,
+        TriggerSlope,
+        TriggerSource,
+        WaveformShape,
+    )
+    from keysight_33600a.simulator import SimulatedKeysight33600A
+    from keysight_33600a.validation import (
+        normalize_load,
+        validate_count,
+        validate_frequency,
+        validate_non_negative_value,
+        validate_positive_value,
+        validate_sweep_shape,
+        validate_voltage_settings,
+    )
+else:
+    from .discovery import list_keysight_resources
+    from .errors import Keysight33600AError
+    from .instrument import Keysight33600A
+    from .models import (
+        AmplitudeUnit,
+        BurstMode,
+        ModulationSource,
+        SweepSpacing,
+        TriggerSlope,
+        TriggerSource,
+        WaveformShape,
+    )
+    from .simulator import SimulatedKeysight33600A
+    from .validation import (
+        normalize_load,
+        validate_count,
+        validate_frequency,
+        validate_non_negative_value,
+        validate_positive_value,
+        validate_sweep_shape,
+        validate_voltage_settings,
+    )
 
 
 @dataclass
@@ -53,6 +83,7 @@ class Keysight33600AFrontPanel(tk.Tk):
 
         self.simulate = simulate
         self.instrument: Optional[Keysight33600A] = None
+        self.device_model = "33622A"
         self.selected_channel = 1
         self.current_mode = "Waveforms"
         self.states: Dict[int, ChannelVisualState] = {
@@ -336,7 +367,9 @@ class Keysight33600AFrontPanel(tk.Tk):
             else:
                 self.instrument = Keysight33600A(resource)
             self.instrument.connect()
-            self.idn_var.set(self.instrument.identify())
+            idn = self.instrument.identify()
+            self.idn_var.set(idn)
+            self.device_model = self._infer_model(idn)
             self.instrument.set_output(1, False)
             self.instrument.set_output(2, False)
             self._log(f"Connected: {self.idn_var.get()}")
@@ -386,6 +419,7 @@ class Keysight33600AFrontPanel(tk.Tk):
 
     def _select_mode(self, mode: str) -> None:
         self.current_mode = mode
+        self._load_selected_channel_into_controls()
         self._rebuild_mode_panel()
         self._refresh_mode_buttons()
 
@@ -726,7 +760,7 @@ class Keysight33600AFrontPanel(tk.Tk):
             offset = float(self.offset_var.get())
             load_value = normalize_load(self.load_var.get())
 
-            validate_frequency(shape, frequency)
+            validate_frequency(shape, frequency, amplitude)
             validate_voltage_settings(amplitude, offset, load_value)
 
             inst.set_function(ch, shape)
@@ -964,9 +998,71 @@ class Keysight33600AFrontPanel(tk.Tk):
         self.load_var.set(str(self._safe_number(lambda: inst.get_load(ch), self.load_var.get())))
         self.unit_var.set(self._safe_str(lambda: inst.get_amplitude_unit(ch), default=self.unit_var.get()))
 
-        self.sweep_enable_var.set(self.states[ch].sweep_on)
-        self.burst_enable_var.set(self.states[ch].burst_on)
-        self.trigger_source_var.set(self.states[ch].trigger_source)
+        self._load_modulation_controls(ch)
+        self._load_sweep_controls(ch)
+        self._load_burst_controls(ch)
+        self._load_trigger_controls(ch)
+
+    def _load_modulation_controls(self, channel: int) -> None:
+        inst = self.instrument
+        if inst is None:
+            return
+
+        modulation_map = [
+            ("AM", lambda: inst.get_am_enabled(channel), lambda: inst.get_am_source(channel), lambda: inst.get_am_depth(channel)),
+            ("FM", lambda: inst.get_fm_enabled(channel), lambda: inst.get_fm_source(channel), lambda: inst.get_fm_deviation(channel)),
+            ("PM", lambda: inst.get_pm_enabled(channel), lambda: inst.get_pm_source(channel), lambda: inst.get_pm_deviation(channel)),
+            ("FSK", lambda: inst.get_fsk_enabled(channel), lambda: inst.get_fsk_source(channel), lambda: inst.get_fsk_frequency(channel)),
+            ("BPSK", lambda: inst.get_bpsk_enabled(channel), lambda: inst.get_bpsk_source(channel), lambda: inst.get_bpsk_phase(channel)),
+        ]
+
+        for mod_type, enabled_fn, source_fn, value_fn in modulation_map:
+            if self._safe_bool(enabled_fn, default=False):
+                self.mod_type_var.set(mod_type)
+                self.mod_enable_var.set(True)
+                self.mod_source_var.set(self._safe_str(source_fn, default=self.mod_source_var.get()))
+                self.mod_value_var.set(str(self._safe_number(value_fn, self.mod_value_var.get())))
+                return
+
+        self.mod_enable_var.set(False)
+        self.mod_type_var.set(self.mod_type_var.get() or "AM")
+        self.mod_source_var.set(self._safe_str(lambda: inst.get_am_source(channel), default=self.mod_source_var.get()))
+        self.mod_value_var.set(str(self._safe_number(lambda: inst.get_am_depth(channel), self.mod_value_var.get())))
+
+    def _load_sweep_controls(self, channel: int) -> None:
+        inst = self.instrument
+        if inst is None:
+            return
+
+        self.sweep_enable_var.set(self._safe_bool(lambda: inst.get_sweep_enabled(channel), default=False))
+        self.sweep_spacing_var.set(self._safe_str(lambda: inst.get_sweep_spacing(channel), default=self.sweep_spacing_var.get()))
+        self.sweep_start_var.set(str(self._safe_number(lambda: inst.get_sweep_start(channel), self.sweep_start_var.get())))
+        self.sweep_stop_var.set(str(self._safe_number(lambda: inst.get_sweep_stop(channel), self.sweep_stop_var.get())))
+        self.sweep_time_var.set(str(self._safe_number(lambda: inst.get_sweep_time(channel), self.sweep_time_var.get())))
+        self.sweep_hold_var.set(str(self._safe_number(lambda: inst.get_sweep_hold_time(channel), self.sweep_hold_var.get())))
+        self.sweep_return_var.set(str(self._safe_number(lambda: inst.get_sweep_return_time(channel), self.sweep_return_var.get())))
+        self.sweep_trigger_source_var.set(self._safe_str(lambda: inst.get_sweep_trigger_source(channel), default=self.sweep_trigger_source_var.get()))
+
+    def _load_burst_controls(self, channel: int) -> None:
+        inst = self.instrument
+        if inst is None:
+            return
+
+        self.burst_enable_var.set(self._safe_bool(lambda: inst.get_burst_enabled(channel), default=False))
+        self.burst_mode_var.set(self._safe_str(lambda: inst.get_burst_mode(channel), default=self.burst_mode_var.get()))
+        self.burst_cycles_var.set(str(self._safe_number(lambda: inst.get_burst_ncycles(channel), self.burst_cycles_var.get())))
+        self.burst_period_var.set(str(self._safe_number(lambda: inst.get_burst_period(channel), self.burst_period_var.get())))
+
+    def _load_trigger_controls(self, channel: int) -> None:
+        inst = self.instrument
+        if inst is None:
+            return
+
+        self.trigger_source_var.set(self._safe_str(lambda: inst.get_trigger_source(channel), default=self.trigger_source_var.get()))
+        self.trigger_count_var.set(str(self._safe_number(lambda: inst.get_trigger_count(channel), self.trigger_count_var.get())))
+        self.trigger_delay_var.set(str(self._safe_number(lambda: inst.get_trigger_delay(channel), self.trigger_delay_var.get())))
+        self.trigger_timer_var.set(str(self._safe_number(lambda: inst.get_trigger_timer(channel), self.trigger_timer_var.get())))
+        self.trigger_slope_var.set(self._safe_str(lambda: inst.get_trigger_slope(channel), default=self.trigger_slope_var.get()))
 
     @staticmethod
     def _safe_number(fn, fallback: str) -> float | str:
@@ -1028,6 +1124,14 @@ class Keysight33600AFrontPanel(tk.Tk):
             parts.append("Base Waveform")
 
         return " | ".join(parts)
+
+    @staticmethod
+    def _infer_model(idn: str) -> str:
+        for token in idn.split(","):
+            token = token.strip()
+            if token.startswith("336") and token.endswith("A"):
+                return token
+        return "33622A"
 
 
 def main(argv: Optional[list[str]] = None) -> None:
