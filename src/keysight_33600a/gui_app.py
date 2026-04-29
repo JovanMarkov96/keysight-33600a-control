@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter import messagebox
@@ -17,6 +18,16 @@ from .models import (
     TriggerSource,
     WaveformShape,
 )
+from .simulator import SimulatedKeysight33600A
+from .validation import (
+    normalize_load,
+    validate_count,
+    validate_frequency,
+    validate_non_negative_value,
+    validate_positive_value,
+    validate_sweep_shape,
+    validate_voltage_settings,
+)
 
 
 @dataclass
@@ -33,13 +44,14 @@ class ChannelVisualState:
 class Keysight33600AFrontPanel(tk.Tk):
     """Standalone front-panel-inspired GUI for Keysight 33600A control."""
 
-    def __init__(self) -> None:
+    def __init__(self, simulate: bool = False) -> None:
         super().__init__()
         self.title("Keysight 33600A Control Panel")
         self.geometry("1420x860")
         self.minsize(1200, 760)
         self.configure(bg="#202327")
 
+        self.simulate = simulate
         self.instrument: Optional[Keysight33600A] = None
         self.selected_channel = 1
         self.current_mode = "Waveforms"
@@ -297,6 +309,11 @@ class Keysight33600AFrontPanel(tk.Tk):
         self.log_text.configure(state=tk.DISABLED)
 
     def _auto_fill_resource(self) -> None:
+        if self.simulate:
+            self.resource_var.set("SIM::KEYSIGHT33600A")
+            self._log("Simulation mode selected")
+            return
+
         try:
             resources = list_keysight_resources()
             if not resources:
@@ -314,7 +331,10 @@ class Keysight33600AFrontPanel(tk.Tk):
             return
 
         try:
-            self.instrument = Keysight33600A(resource)
+            if self.simulate or resource.upper().startswith("SIM::"):
+                self.instrument = SimulatedKeysight33600A(resource)
+            else:
+                self.instrument = Keysight33600A(resource)
             self.instrument.connect()
             self.idn_var.set(self.instrument.identify())
             self.instrument.set_output(1, False)
@@ -700,10 +720,19 @@ class Keysight33600AFrontPanel(tk.Tk):
         def action() -> None:
             inst = self._require_instrument()
             ch = self.selected_channel
-            inst.set_function(ch, self.waveform_var.get())
-            inst.set_frequency(ch, float(self.freq_var.get()))
-            inst.set_amplitude(ch, float(self.amp_var.get()))
-            inst.set_offset(ch, float(self.offset_var.get()))
+            shape = WaveformShape(self.waveform_var.get())
+            frequency = float(self.freq_var.get())
+            amplitude = float(self.amp_var.get())
+            offset = float(self.offset_var.get())
+            load_value = normalize_load(self.load_var.get())
+
+            validate_frequency(shape, frequency)
+            validate_voltage_settings(amplitude, offset, load_value)
+
+            inst.set_function(ch, shape)
+            inst.set_frequency(ch, frequency)
+            inst.set_amplitude(ch, amplitude)
+            inst.set_offset(ch, offset)
             inst.set_phase(ch, float(self.phase_var.get()))
 
         self._execute(f"Apply waveform CH{self.selected_channel}", action)
@@ -713,10 +742,13 @@ class Keysight33600AFrontPanel(tk.Tk):
             inst = self._require_instrument()
             raw = self.load_var.get().strip()
             ch = self.selected_channel
+            normalized = normalize_load(raw)
+            if self.unit_var.get().upper() == AmplitudeUnit.DBM.value and normalized == "INF":
+                raise ValueError("dBm units require a finite output termination")
             try:
-                inst.set_load(ch, float(raw))
+                inst.set_load(ch, normalized)
             except ValueError:
-                inst.set_load(ch, raw)
+                inst.set_load(ch, normalized)
 
         self._execute(f"Apply parameters CH{self.selected_channel}", action)
 
@@ -765,9 +797,20 @@ class Keysight33600AFrontPanel(tk.Tk):
         def action() -> None:
             inst = self._require_instrument()
             ch = self.selected_channel
+            shape = WaveformShape(self.waveform_var.get())
+            validate_sweep_shape(shape)
+            start = float(self.sweep_start_var.get())
+            stop = float(self.sweep_stop_var.get())
+            validate_positive_value("Sweep start frequency", start)
+            validate_positive_value("Sweep stop frequency", stop)
+            if start >= stop:
+                raise ValueError("Sweep start frequency must be lower than stop frequency")
+            validate_positive_value("Sweep time", float(self.sweep_time_var.get()))
+            validate_non_negative_value("Sweep hold time", float(self.sweep_hold_var.get()))
+            validate_non_negative_value("Sweep return time", float(self.sweep_return_var.get()))
             inst.set_sweep_spacing(ch, self.sweep_spacing_var.get())
-            inst.set_sweep_start(ch, float(self.sweep_start_var.get()))
-            inst.set_sweep_stop(ch, float(self.sweep_stop_var.get()))
+            inst.set_sweep_start(ch, start)
+            inst.set_sweep_stop(ch, stop)
             inst.set_sweep_time(ch, float(self.sweep_time_var.get()))
             inst.set_sweep_hold_time(ch, float(self.sweep_hold_var.get()))
             inst.set_sweep_return_time(ch, float(self.sweep_return_var.get()))
@@ -780,6 +823,8 @@ class Keysight33600AFrontPanel(tk.Tk):
         def action() -> None:
             inst = self._require_instrument()
             ch = self.selected_channel
+            validate_count("Burst cycles", int(self.burst_cycles_var.get()))
+            validate_positive_value("Burst period", float(self.burst_period_var.get()))
             inst.set_burst_mode(ch, self.burst_mode_var.get())
             inst.set_burst_ncycles(ch, int(self.burst_cycles_var.get()))
             inst.set_burst_period(ch, float(self.burst_period_var.get()))
@@ -791,6 +836,9 @@ class Keysight33600AFrontPanel(tk.Tk):
         def action() -> None:
             inst = self._require_instrument()
             ch = self.selected_channel
+            validate_count("Trigger count", int(self.trigger_count_var.get()))
+            validate_non_negative_value("Trigger delay", float(self.trigger_delay_var.get()))
+            validate_positive_value("Trigger timer", float(self.trigger_timer_var.get()))
             inst.set_trigger_source(ch, self.trigger_source_var.get())
             inst.set_trigger_count(ch, int(self.trigger_count_var.get()))
             inst.set_trigger_delay(ch, float(self.trigger_delay_var.get()))
@@ -982,8 +1030,12 @@ class Keysight33600AFrontPanel(tk.Tk):
         return " | ".join(parts)
 
 
-def main() -> None:
-    app = Keysight33600AFrontPanel()
+def main(argv: Optional[list[str]] = None) -> None:
+    parser = argparse.ArgumentParser(description="Keysight 33600A control panel")
+    parser.add_argument("--simulate", action="store_true", help="Run without hardware")
+    args = parser.parse_args(argv)
+
+    app = Keysight33600AFrontPanel(simulate=args.simulate)
     app.mainloop()
 
 
