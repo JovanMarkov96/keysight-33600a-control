@@ -77,12 +77,8 @@ class Keysight33600A:
             self._inst.read_termination = self.read_termination
         except Exception as exc:
             self._inst = None
-            if self._rm is not None:
-                try:
-                    self._rm.close()
-                except Exception:
-                    pass
-                self._rm = None
+            # Do NOT close self._rm here — closing a ResourceManager on NI-VISA can
+            # invalidate VISA sessions opened through other RMs in the same process.
             raise ConnectionError33600A(
                 f"Failed to connect to {self.resource_name}: {exc}"
             ) from exc
@@ -98,13 +94,8 @@ class Keysight33600A:
             finally:
                 self._inst = None
 
-        if self._rm is not None:
-            try:
-                self._rm.close()
-            except Exception as exc:
-                errors.append(exc)
-            finally:
-                self._rm = None
+        # Keep self._rm alive — closing it can invalidate other VISA sessions in the process.
+        # The RM will be cleaned up when this object is garbage-collected or the process exits.
 
         if errors:
             raise ConnectionError33600A(f"Disconnect encountered errors: {errors[0]}")
